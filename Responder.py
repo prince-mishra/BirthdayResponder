@@ -60,10 +60,11 @@ class Consumer(threading.Thread):
             time.sleep(30)
 
 class Producer(threading.Thread):
-    def __init__(self, url, access_token):
+    def __init__(self, url, profile_id, access_token):
         threading.Thread.__init__(self)
         self.access_token = access_token
         self.url = url
+        self.profile_id = profile_id
         self.terminate = False
 
     def insert_item(self, post_id):
@@ -83,7 +84,7 @@ class Producer(threading.Thread):
 
     def terminate_condition(self):
         print "resetting"
-        self.url = "https://graph.facebook.com/1107033555/feed?access_token="+self.access_token
+        self.url = "https://graph.facebook.com/" + self.profile_id + "/feed?access_token="+self.access_token
 
     def fetch_posts(self):
         print "Fetching"
@@ -109,19 +110,20 @@ class Producer(threading.Thread):
 
 if __name__=="__main__":
     """
-    Usage : python Responder.py access_token last_post_id
+    Usage : python Responder.py profile_id access_token last_post_id
     """
-    access_token = sys.argv[1]
+    profile_id = sys.argv[1]
+    access_token = sys.argv[2]
     connect_db()
     init_db()
-    url = "https://graph.facebook.com/1107033555/feed?access_token="+access_token
+    url = "https://graph.facebook.com/" + profile_id + "/feed?access_token="+access_token
     try:
-        if sys.argv[2]:
-            seed = Post(post_id = sys.argv[2])
+        if sys.argv[3]:
+            seed = Post(post_id = sys.argv[3])
             # Ugly hack. This ensures that the application resets the url to root url when it hits this post
     except:
         pass
-    p = Producer(url = url, access_token = access_token)
+    p = Producer(url = url, profile_id = profile_id, access_token = access_token)
     c = Consumer(access_token = access_token)
     p.start()
     c.start()
