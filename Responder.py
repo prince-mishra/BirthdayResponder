@@ -6,10 +6,15 @@ import sqlite3 as sqlite
 import time
 import threading
 import sys
+import json
 
 class Post(SQLObject):
-    post_id = UnicodeCol(length = 1024, unique = True) # lets ensure unique links at db level
-    visited = BoolCol(default = False)
+    post_id     = UnicodeCol(length = 1024, unique = True) # lets ensure unique links at db level
+    visited     = BoolCol(default = False)
+    message     = UnicodeCol(length = 8192, default = '') 
+    ptype       = UnicodeCol(length = 1024, default = '')
+    from_name   = UnicodeCol(length = 1024, default = '')
+    from_id     = UnicodeCol(length = 1024, default = '')
 
 def connect_db():
         connection_string = 'sqlite:' + 'responder.db'
@@ -34,21 +39,26 @@ class Consumer(threading.Thread):
         print "Posts to respond : ", posts
         for item in posts:
             self.like(item.post_id)
+            time.sleep(30)
             self.comment(item.post_id)
+            time.sleep(30)
             item.visited = True
 
     def like(self, post_id):
         print "liking : ", post_id
-        url = 'https://graph.facebook.com/' + post_id + '/likes?access_token='+self.access_token
+        
+        url = 'https://graph.facebook.com/v2.2/' + post_id + '/likes?access_token='+self.access_token
+        print url
         r = requests.post(url)
-        print r.json
-
+        print r.content
+        
     def comment(self, post_id):
         print "commenting : ", post_id
-        url = 'https://graph.facebook.com/' + post_id + '/comments?access_token='+self.access_token
+        url = 'https://graph.facebook.com/v2.2/' + post_id + '/comments?access_token='+self.access_token
         message = self.get_message()
         r = requests.post(url, data={'message' : message})
-        print r.json
+        print r.content
+        
 
     def get_message(self):
         return "Thanks"
@@ -57,7 +67,8 @@ class Consumer(threading.Thread):
         while True:
             posts = self.get_unresponsed_posts()
             self.respond(posts)
-            time.sleep(30)
+            print "consumer waiting"
+            time.sleep(300)
 
 class Producer(threading.Thread):
     def __init__(self, url, profile_id, access_token):
@@ -67,8 +78,9 @@ class Producer(threading.Thread):
         self.profile_id = profile_id
         self.terminate = False
 
-    def insert_item(self, post_id):
-        p = Post(post_id = post_id)
+    def insert_item(self, item):
+        from_user = item.get('from')
+        p = Post(post_id = item['id'], message = item.get('message', ''), ptype=item.get('type', ''), from_id=from_user.get('id', ''), from_name=from_user.get('name', ''))
         print "inserted : ", p
         return p
 
@@ -77,8 +89,8 @@ class Producer(threading.Thread):
             try:
                 posts = self.fetch_posts()
                 self.insert_posts(posts)
-                print "waiting"
-                time.sleep(10)
+                print "producer waiting"
+                time.sleep(30)
             except Exception:
                 pass
 
@@ -87,18 +99,20 @@ class Producer(threading.Thread):
         self.url = "https://graph.facebook.com/" + self.profile_id + "/feed?access_token="+self.access_token
 
     def fetch_posts(self):
-        print "Fetching"
+        print "Fetching : ", self.url
         r = requests.get(self.url)
-        obj = r.json
+        obj = json.loads(r.content)
         return obj
 
     def insert_posts(self, posts):
-        print "inserting"
+        print "\n\ninserting :"
         if posts.get('data'):
+            print "\nposts : ", len(posts['data'])
             for item in posts['data']:
                 try:
-                    self.insert_item(item['id'])
+                    self.insert_item(item)
                 except Exception, fault:
+                    print "Error in insert_posts. item : %s Error : %s" % (item, str(fault))
                     self.terminate_condition()
                     break
             else:
@@ -107,6 +121,17 @@ class Producer(threading.Thread):
                     self.url = next_url + '&access_token=' + self.access_token
                 else:
                     self.terminate_condition()
+
+    def get_profile_url(self, profileid):
+        return "https://graph.facebook.com/" + profileid + "/?access_token="+self.access_token
+
+    def fetch_profile(self, profileid):
+        url = self.get_profile_url(profileid)
+        r = requests.get(url)
+        obj = json.loads(r.content)
+        return obj
+
+
 
 if __name__=="__main__":
     """
