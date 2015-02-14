@@ -7,14 +7,33 @@ import time
 import threading
 import sys
 import json
+import random
 
 class Post(SQLObject):
     post_id     = UnicodeCol(length = 1024, unique = True) # lets ensure unique links at db level
     visited     = BoolCol(default = False)
-    message     = UnicodeCol(length = 8192, default = '') 
+    message     = UnicodeCol(length = 8192, default = '')
     ptype       = UnicodeCol(length = 1024, default = '')
     from_name   = UnicodeCol(length = 1024, default = '')
     from_id     = UnicodeCol(length = 1024, default = '')
+
+class MessagePool():
+    def __init__(self):
+        self.messages = ["Hey Thanks %s. How is life at your end?",
+        "Thank you so much %s. Hope you had a great day too.",
+        "Thanks %s for wishing! How did your day go?",
+        "Dhanyawaad %s! kya haal chaal?",
+        "%s Thank you so much! How are you?",
+        "Thank you %s. What are you upto these days?",
+        "%s haardik abhinandan ;-)",
+        "Thanks a lot %s. Howz you?",
+        "Thank you %s!"]
+
+    def get_random_index(self):
+        return random.randint(0,len(self.messages)-1)
+
+    def get_message(self, person_name):
+        return self.messages[self.get_random_index()] % person_name
 
 def connect_db():
         connection_string = 'sqlite:' + 'responder.db'
@@ -28,6 +47,7 @@ class Consumer(threading.Thread):
     def __init__(self, access_token):
         threading.Thread.__init__(self)
         self.access_token = access_token
+        self.msg_pool = MessagePool()
 
     def get_unresponsed_posts(self):
         print "Getting unresponded posts"
@@ -40,28 +60,29 @@ class Consumer(threading.Thread):
         for item in posts:
             self.like(item.post_id)
             time.sleep(30)
-            self.comment(item.post_id)
+            self.comment(item.post_id, item.from_name)
             time.sleep(30)
             item.visited = True
 
     def like(self, post_id):
         print "liking : ", post_id
-        
+
         url = 'https://graph.facebook.com/v2.2/' + post_id + '/likes?access_token='+self.access_token
         print url
         r = requests.post(url)
         print r.content
-        
-    def comment(self, post_id):
+
+    def comment(self, post_id, person_name):
         print "commenting : ", post_id
         url = 'https://graph.facebook.com/v2.2/' + post_id + '/comments?access_token='+self.access_token
-        message = self.get_message()
+        message = self.get_message(person_name)
+        print message
         r = requests.post(url, data={'message' : message})
         print r.content
-        
 
-    def get_message(self):
-        return "Thanks"
+
+    def get_message(self, person_name):
+        return self.msg_pool.get_message(person_name)
 
     def run(self):
         while True:
@@ -80,6 +101,8 @@ class Producer(threading.Thread):
 
     def insert_item(self, item):
         from_user = item.get('from')
+        if from_user['id'] == profile_id:
+            return
         p = Post(post_id = item['id'], message = item.get('message', ''), ptype=item.get('type', ''), from_id=from_user.get('id', ''), from_name=from_user.get('name', ''))
         print "inserted : ", p
         return p
@@ -122,15 +145,6 @@ class Producer(threading.Thread):
                 else:
                     self.terminate_condition()
 
-    def get_profile_url(self, profileid):
-        return "https://graph.facebook.com/" + profileid + "/?access_token="+self.access_token
-
-    def fetch_profile(self, profileid):
-        url = self.get_profile_url(profileid)
-        r = requests.get(url)
-        obj = json.loads(r.content)
-        return obj
-
 
 
 if __name__=="__main__":
@@ -141,7 +155,7 @@ if __name__=="__main__":
     access_token = sys.argv[2]
     connect_db()
     init_db()
-    url = "https://graph.facebook.com/" + profile_id + "/feed?access_token="+access_token
+    url = "https://graph.facebook.com/" + profile_id + "/feed?limit=250&access_token="+access_token
     try:
         if sys.argv[3]:
             seed = Post(post_id = sys.argv[3])
