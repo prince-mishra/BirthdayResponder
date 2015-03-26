@@ -1,7 +1,8 @@
 Birthday Responder
 ==================
+For the lazy ones. for those of us who feel a need to thank every birthday post but at the same time feel too lazy to actually do that. No need to put up a single status to thank everyone, use the script to thank everyone individually.
 
-How many times have we wondered, if there were a tool which would just auto respond to each and every birthday wish on our facebook walls. Here, this applications does exactly that. I am not a big fan of social media and believe that those who really care would give me a call on my phone. But for those lazy friends who find it satisfactory to post on facebook, here's my lazy response. 
+the whole idea of computing is - the machine should work more than the man.
 
 Usage
 -----
