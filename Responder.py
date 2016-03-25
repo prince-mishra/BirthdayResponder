@@ -19,24 +19,24 @@ class Post(SQLObject):
 
 class MessagePool():
     def __init__(self):
-        self.messages = ["Hey Thanks %s. How is life at your end?",
-        "Thank you so much %s. Hope you had a great day too.",
-        "Thanks %s for wishing! How did your day go?",
-        "Dhanyawaad %s! kya haal chaal?",
-        "%s Thank you so much! How are you?",
-        "Thank you %s. What are you upto these days?",
-        "%s haardik abhinandan ;-)",
-        "Thanks a lot %s. Howz you?",
-        "Thank you %s!"]
+        self.messages = ["Hey Thanks. How is life at your end?",
+        "Thank you so much. Hope you had a great day too.",
+        "Thanks for wishing! How did your day go?",
+        "Dhanyawaad! kya haal chaal?",
+        "Thank you so much! How are you?",
+        "Thank you. kaise ho?",
+        "haardik abhinandan ;-)",
+        "Thanks a lot. Howz you?",
+        "Thank you!"]
 
     def get_random_index(self):
         return random.randint(0,len(self.messages)-1)
 
     def get_message(self, person_name):
-        return self.messages[self.get_random_index()] % person_name
+        return self.messages[self.get_random_index()] #% person_name
 
 def connect_db():
-        connection_string = 'sqlite:' + 'responder.db'
+        connection_string = 'sqlite:' + 'responder_prince_2016.db'
         connection = connectionForURI(connection_string)
         sqlhub.processConnection = connection
 
@@ -100,9 +100,7 @@ class Producer(threading.Thread):
         self.terminate = False
 
     def insert_item(self, item):
-        from_user = item.get('from')
-        if from_user['id'] == profile_id:
-            return
+        from_user = item['from']
         p = Post(post_id = item['id'], message = item.get('message', ''), ptype=item.get('type', ''), from_id=from_user.get('id', ''), from_name=from_user.get('name', ''))
         print "inserted : ", p
         return p
@@ -119,7 +117,7 @@ class Producer(threading.Thread):
 
     def terminate_condition(self):
         print "resetting"
-        self.url = "https://graph.facebook.com/" + self.profile_id + "/feed?access_token="+self.access_token
+        self.url = "https://graph.facebook.com/v2.2/" + self.profile_id + "/feed?access_token="+self.access_token
 
     def fetch_posts(self):
         print "Fetching : ", self.url
@@ -127,12 +125,25 @@ class Producer(threading.Thread):
         obj = json.loads(r.content)
         return obj
 
+    def commented_already(self, post):
+        ret = post.get('comments') and post['comments'].get('data')
+        return ret
+
     def insert_posts(self, posts):
         print "\n\ninserting :"
+        print posts.keys()
         if posts.get('data'):
             print "\nposts : ", len(posts['data'])
             for item in posts['data']:
                 try:
+                    from_user = item.get('from')
+                    if from_user and from_user['id'] == self.profile_id:
+                        print "Self posted"
+                        continue
+                    # if self.commented_already(item):
+                    #     print "commented already"
+                    #     continue
+
                     self.insert_item(item)
                 except Exception, fault:
                     print "Error in insert_posts. item : %s Error : %s" % (item, str(fault))
@@ -155,10 +166,11 @@ if __name__=="__main__":
     access_token = sys.argv[2]
     connect_db()
     init_db()
-    url = "https://graph.facebook.com/" + profile_id + "/feed?limit=250&access_token="+access_token
+    url = "https://graph.facebook.com/v2.2/" + profile_id + "/feed?limit=100&access_token="+access_token
     try:
         if sys.argv[3]:
-            seed = Post(post_id = sys.argv[3])
+            # TODO : make this required field
+            seed = Post(post_id = sys.argv[3], visited = True)
             # Ugly hack. This ensures that the application resets the url to root url when it hits this post
     except:
         pass
